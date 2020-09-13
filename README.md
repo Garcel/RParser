@@ -8,10 +8,10 @@ tuned those productions to eliminate left recursions and to adapt them to JavaCC
 
 ## How to use it
 
-1.- Pull the repo.
-2.- Open a console at the repo source dir.
-3.- Run ```mvn install```. The parser class (R) should has been generated at this point.
-4.- Now in your project, invoke it this way:
+1. Pull the repo.
+2. Open a console at the repo source dir.
+3. Run ```mvn install```. The parser class (R) should has been generated at this point.
+4. Now in your project, invoke it this way:
 ```
 public static void main(String[] args) {
   try {
