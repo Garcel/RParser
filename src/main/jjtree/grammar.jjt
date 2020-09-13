@@ -1,0 +1,306 @@
+/*
+ * Copyright 2020 by José Antonio Garcel
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+options {
+  COMMON_TOKEN_ACTION = true;
+  DEBUG_PARSER = false;
+  DEBUG_LOOKAHEAD = false;
+  DEBUG_TOKEN_MANAGER = false;
+  IGNORE_CASE = false;
+  JAVA_UNICODE_ESCAPE = false;
+  LOOKAHEAD = 2;
+  STATIC = false;
+  TOKEN_EXTENDS = "com.garcel.parser.r.RToken";
+  UNICODE_INPUT = true;
+}
+
+PARSER_BEGIN(R)
+
+package com.garcel.parser.r.autogen;
+
+public class R extends com.garcel.parser.r.RAbstractParser {
+
+  public SimpleNode parse() throws ParseException {
+    return Program();
+  }
+}
+
+PARSER_END(R)
+
+TOKEN_MGR_DECLS : {
+  private Token last = null;
+
+  void CommonTokenAction(Token token) {
+    // perform the linking to the previously matched token
+    token.prev = last;
+    last = token;
+
+    /*
+     * Handle wrongly matched tokens for inputs like: 2iL, .2var,...
+     * These cases must lead to a TokenMgrError but the tokener generates two tokens without an "space" special token
+     * in between, so let's handle it manually :)
+     */
+    switch (token.kind) {
+      case SYMBOL:
+      case NUM_CONST:
+        Token prev = token.prev;
+
+        if (prev != null) {
+          Token specialToken = token.specialToken;
+          int prevKind = prev.kind;
+          if (specialToken == null && (prevKind == SYMBOL || prevKind == NUM_CONST)) {
+            throw new TokenMgrError("Bad identifier matched at line " + prev.beginLine + ", column " + prev.beginColumn,
+            TokenMgrError.LEXICAL_ERROR);
+          }
+        }
+
+      default:
+        break;
+    }
+  }
+}
+
+<DEFAULT> SPECIAL_TOKEN : {
+  <COMMENT: "#" ( ~[ "\n", "\r" ] )*>
+  | <EOL: ( "\n" | "\r" | "\r\n" )+>
+  | <SPACE: ( " " | "\t" | "\f" )+>
+}
+
+<DEFAULT> TOKEN : {
+  // line terminators
+  <SEMICOLON: ";">
+
+  // punctuation marks
+  | <LEFT_BRACKET: "(">
+  | <RIGHT_BRACKET: ")">
+  | <LEFT_BRACE: "{">
+  | <RIGHT_BRACE: "}">
+  | <LEFT_SQUARE: "[">
+  | <LEFT_SQUARE_DOUBLE: "[[">
+  | <RIGHT_SQUARE: "]">
+
+  // operators
+  | <AND: "&">
+  | <AND2: "&&">
+  | <DIVISION: "/">
+  | <EQ: "==">
+  | <EQ_ASSIGN: ( "=" | ":=" )>
+  | <EXPONENTIATION: "^">
+  | <GE: ">=">
+  | <GT: ">">
+  | <HELP: "?">
+  | <INT_DIVISION: "%/%">
+  | <KRONECKER_PRODUCT: "%x%">
+  | <MATCHING_OPERATOR: "%" <IN> "%">
+  | <MATRIX_PRODUCT: "%*%">
+  | <MINUS: "-">
+  | <MOD: "%%">
+  | <MULTIPLICATION: "*">
+  | <NE: "!=">
+  | <NOT: "!">
+  | <LE: "<=">
+  | <LEFT_ASSIGN: "<" ( "<" )? "-">
+  | <LIST_SUBSET: "$">
+  | <LT: "<">
+  | <OR: "|">
+  | <OR2: "||">
+  | <OUTER_PRODUCT: "%o%">
+  | <PLUS: "+">
+  | <RIGHT_ASSIGN: "-" ">" ( ">" )?>
+  | <SEQUENCE: ":">
+  | <SPECIAL_OPERATOR: "%" ( ~["%"] )+ "%">
+  | <TILDE: "~">
+
+  // reserved or special words
+  | <AT: "@">
+  | <BREAK: "break">
+  | <COMMA: ",">
+  | <#DOT: ".">
+  | <FUNCTION: "function">
+  | <ELSE: "else">
+  | <FOR: "for">
+  | <IF: "if">
+  | <IN: "in">
+  | <NEXT: "next">
+  | <NS_GET: "::">
+  | <NS_GET_INT: ":::">
+  | <REPEAT: "repeat">
+  | <#UNDERSCORE: "_">
+  | <WHILE: "while">
+
+  // constants and identifiers
+  | <NUM_CONST:
+    ( ( <INTEGER_LITERAL> | <FLOAT_LITERAL> | <HEX_LITERAL> ) ( "l" | "L" )?
+      | <COMPLEX_LITERAL>
+    )>
+
+  | <#INTEGER_LITERAL:
+  		"0"
+  		| <NON_ZERO_DIGIT> ( <DIGIT> )*
+  	>
+  | <#DIGIT: ["0"-"9"]>
+  | <#NON_ZERO_DIGIT: ["1"-"9"]>
+
+  | <#FLOAT_LITERAL:
+    ( <DIGIT> )+ ( <DOT> ( <DIGIT> )* )? ( <EXP> )?
+      | <DOT> ( <DIGIT> )+ ( <EXP> )?
+    >
+  | <#EXP: ("e" | "E") ( <PLUS> | <MINUS> )? ( <DIGIT> )+>
+
+  | <#COMPLEX_LITERAL: ( <INTEGER_LITERAL> | <FLOAT_LITERAL> ) "i">
+
+  | <#HEX_LITERAL: "0" ["x","X"] ( <HEX_DIGIT> )+>
+  | <#HEX_DIGIT: ( <DIGIT> | ["a"-"f"] | ["A"-"F"] )>
+
+  | <INF: "Inf">
+  | <NA: "NA">
+  | <NAN: "NaN">
+  | <NULL_CONST: "NULL">
+
+  | <LOGICAL_CONSTANT: ( "TRUE" | "FALSE" )>
+
+  | <STR_CONST: ( <SINGLE_QUOTE_STR> | <DOUBLE_QUOTE_STR> )>
+  | <#SINGLE_QUOTE_STR: "'" ( "\\" ~[] | ( ~["\'", "\\"] ) )* "'" >
+  | <#DOUBLE_QUOTE_STR: "\"" ( "\\" ~[] | ( ~["\"", "\\"] ) )* "\"" >
+
+  | <SYMBOL: ( <SYMBOL_LETTER> | <SYMBOL_DOT> | <SYMBOL_BACKTICK> )>
+  | <#SYMBOL_BACKTICK: "`" ( ~["`"] )* "`" >
+  | <#SYMBOL_LETTER: <LETTER> ( <SYMBOL_TAIL> )*>
+  | <#SYMBOL_DOT: <DOT> ( ( <LETTER> | <DOT> | <UNDERSCORE> ) ( <SYMBOL_TAIL> )* )?>
+  | <#SYMBOL_TAIL: ( <LETTER> | <DIGIT> | <DOT> | <UNDERSCORE> )+>
+  | <#LETTER:
+  		["a"-"z"]
+  		| ["A"-"Z"]
+  	>
+}
+
+/** Root production. */
+SimpleNode Program() : {}
+{
+  ( LOOKAHEAD( { !isToken(EOF) } ) expr() ( <SEMICOLON> | <EOF> | { isNewLine(); } ) )*
+  <EOF>
+
+  { return jjtThis; }
+}
+
+void expr() #Expression : {}
+{
+  _expr()
+  ( <AND> expr()
+    | <AND2> expr()
+    | <AT> ( <SYMBOL> | <STR_CONST> )
+    | <DIVISION> expr()
+    | <EQ> expr()
+    | <EQ_ASSIGN> expr()
+    | <EXPONENTIATION> expr()
+    | <GE> expr()
+    | <GT> expr()
+    | <HELP> expr()
+    | <KRONECKER_PRODUCT> expr()
+    | <INT_DIVISION> expr()
+    | <MINUS> expr()
+    | <MATCHING_OPERATOR> expr()
+    | <MATRIX_PRODUCT> expr()
+    | <MOD> expr()
+    | <MULTIPLICATION> expr()
+    | <NE> expr()
+    | <LE> expr()
+    | <LEFT_ASSIGN> expr()
+    | <LEFT_BRACKET> [ subList() ] <RIGHT_BRACKET>
+    | <LEFT_SQUARE_DOUBLE> [ subList() ] <RIGHT_SQUARE> <RIGHT_SQUARE>
+    | <LEFT_SQUARE> [ subList() ] <RIGHT_SQUARE>
+    | <LIST_SUBSET> ( <SYMBOL> | <STR_CONST> )
+    | <LT> expr()
+    | <OR> expr()
+    | <OR2> expr()
+    | <OUTER_PRODUCT> expr()
+    | <PLUS> expr()
+    | <RIGHT_ASSIGN> expr()
+    | <SEQUENCE> expr()
+    | <SPECIAL_OPERATOR> expr()
+    | <TILDE> expr()
+  )*
+}
+
+void _expr() #void : {}
+{
+  ( <BREAK>
+    | <FOR> forCond() expr()
+    | <FUNCTION> <LEFT_BRACKET> [ formList() ] <RIGHT_BRACKET> expr()
+    | <HELP> expr()
+    | <IF> ifCond() expr() ( <ELSE> expr() )?
+    | <INF>
+    | <LOGICAL_CONSTANT>
+    | <NA>
+    | <NAN>
+    | <NEXT>
+    | <NUM_CONST>
+    | <NULL_CONST>
+    | <LEFT_BRACE> [ exprList() ] <RIGHT_BRACE>
+    | <LEFT_BRACKET> [ subList() ] <RIGHT_BRACKET>
+    | <MINUS> expr()
+    | <NOT> expr()
+    | <PLUS> expr()
+    | <REPEAT> expr()
+    | ( <STR_CONST> | <SYMBOL> ) [ ( <NS_GET> | <NS_GET_INT> ) ( <SYMBOL> | <STR_CONST> ) ]
+    | <TILDE> expr()
+    | <WHILE> cond() expr()
+  ) ( _expr() ) *
+}
+
+void cond() #Condition : {}
+{
+  <LEFT_BRACKET> expr() <RIGHT_BRACKET>
+}
+
+void ifCond() #Condition : {}
+{
+  <LEFT_BRACKET> expr() <RIGHT_BRACKET>
+}
+
+void forCond() #Condition : {}
+{
+  <LEFT_BRACKET> <SYMBOL> <IN> expr() <RIGHT_BRACKET>
+}
+
+void exprList() #ExpressionList : {}
+{
+  expr()
+  (
+    LOOKAHEAD( { isToken(SEMICOLON) } ) <SEMICOLON> [ expr() ]
+    | LOOKAHEAD( expr(), { isNewLine() } ) expr()
+  )*
+}
+
+void subList() #SubList : {}
+{
+  (
+    ( <COMMA> )+ [ sub() ]
+    | ( <COMMA> )* sub()
+  )
+
+  ( LOOKAHEAD( { isToken(COMMA) } ) <COMMA> [ sub() ] )*
+}
+
+void sub() #Sub : {}
+{
+  ( <SYMBOL> | <STR_CONST> | <NULL_CONST> ) <EQ_ASSIGN> [ expr() ]
+  | expr()
+}
+
+void formList() #FormList : {}{
+  <SYMBOL> [ <EQ_ASSIGN> expr() ] ( LOOKAHEAD( { isToken(COMMA) } ) <COMMA> <SYMBOL> [ <EQ_ASSIGN> expr() ] )*
+}
