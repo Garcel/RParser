@@ -17,18 +17,19 @@
 package com.garcel.parser.r;
 
 import com.garcel.parser.r.autogen.ParseException;
-import com.garcel.parser.r.autogen.R;
+import com.garcel.parser.r.autogen.SimpleNode;
 import com.garcel.parser.r.autogen.TokenMgrError;
+import com.garcel.parser.r.node.RNode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 
+import static com.garcel.parser.r.TestUtils.test;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
@@ -54,17 +55,16 @@ public class RParserTest {
     assertThrows(TokenMgrError.class, () -> test(testCode));
   }
 
-  // IMPLEMENTATION
-  private void test(String testCode) throws ParseException {
-    try (InputStream inputStream = new ByteArrayInputStream(testCode.getBytes())) {
-      R parser = new R(inputStream);
-      parser.parse();
-
-    } catch (IOException e) {
-      // ignore
-    }
+  @DisplayName("Should generate a valid AST")
+  @ParameterizedTest(name = "{index} => Test {0}")
+  @MethodSource("shouldGenerateValidAST")
+  @SuppressWarnings("unused")
+  public void testShouldGenerateValidAST(String name, String testCode, Predicate<SimpleNode> predicate) throws ParseException {
+    RNode root = test(testCode);
+    assertThat(root).matches(predicate);
   }
 
+  // IMPLEMENTATION
   private static Stream<Arguments> shouldParseTestCodeProvider() {
     return Stream.of(
       //<editor-fold desc="Assignments">
@@ -240,6 +240,22 @@ public class RParserTest {
       Arguments.of("identifier when starts with a dot followed by a number", ".2foo"),
       Arguments.of("identifier when starts with an underscore", "_foo")
       //</editor-fold>
+    );
+  }
+
+  private static Stream<Arguments> shouldGenerateValidAST() {
+    return Stream.of(
+      Arguments.of("program having several child expressions",
+        "match_call <- function(correct_call = NULL) {}\n" +
+        "expand_call <- function(call_string) {}\n" +
+        "prints_var <- function(varname) {}\n",
+        (Predicate<SimpleNode>) root -> root.jjtGetNumChildren() == 3
+      ),
+      Arguments.of("program having several child expressions (2)",
+        "match_call <- foo(correct_call = NULL)\n" +
+        "expand_call <- bar(call_string)\n",
+        (Predicate<SimpleNode>) root -> root.jjtGetNumChildren() == 2
+      )
     );
   }
 }

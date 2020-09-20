@@ -20,6 +20,8 @@ import com.garcel.parser.r.autogen.Token;
 
 import java.util.Arrays;
 
+import static com.garcel.parser.r.autogen.RConstants.EOL;
+
 /**
  * RAbstractParser.java - Abstract parser class defining utilities to be used in the parsing process.
  *
@@ -70,6 +72,12 @@ public abstract class RAbstractParser {
     if (current == null) return false;
 
     Token specialToken = current.specialToken;
-    return specialToken != null;
+    while (specialToken != null) {  // check all linked special tokens, not just the first one
+      if (specialToken.kind == EOL) return true;
+
+      specialToken = specialToken.specialToken;
+    }
+
+    return false;
   }
 }

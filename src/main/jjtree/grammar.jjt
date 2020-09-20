@@ -21,9 +21,14 @@ options {
   DEBUG_TOKEN_MANAGER = false;
   IGNORE_CASE = false;
   JAVA_UNICODE_ESCAPE = false;
+  MULTI = false;
+  NODE_CLASS = "com.garcel.parser.r.node.RNode";
+  NODE_FACTORY = "com.garcel.parser.r.node.RNodeFactory";
+  NODE_PREFIX = "";
   LOOKAHEAD = 2;
   STATIC = false;
   TOKEN_EXTENDS = "com.garcel.parser.r.RToken";
+  TRACK_TOKENS = true;
   UNICODE_INPUT = true;
 }
 
@@ -31,9 +36,11 @@ PARSER_BEGIN(R)
 
 package com.garcel.parser.r.autogen;
 
+import com.garcel.parser.r.node.RNode;
+
 public class R extends com.garcel.parser.r.RAbstractParser {
 
-  public SimpleNode parse() throws ParseException {
+  public RNode parse() throws ParseException {
     return Program();
   }
 }
@@ -188,7 +195,7 @@ TOKEN_MGR_DECLS : {
 }
 
 /** Root production. */
-SimpleNode Program() : {}
+RNode Program() : {}
 {
   ( LOOKAHEAD( { !isToken(EOF) } ) expr() ( <SEMICOLON> | <EOF> | { isNewLine(); } ) )*
   <EOF>
@@ -201,10 +208,10 @@ void expr() #Expression : {}
   _expr()
   ( <AND> expr()
     | <AND2> expr()
-    | <AT> ( <SYMBOL> | <STR_CONST> )
+    | Assignment()
+    | <AT> ( Identifier() | StringConstant() )
     | <DIVISION> expr()
     | <EQ> expr()
-    | <EQ_ASSIGN> expr()
     | <EXPONENTIATION> expr()
     | <GE> expr()
     | <GT> expr()
@@ -218,17 +225,15 @@ void expr() #Expression : {}
     | <MULTIPLICATION> expr()
     | <NE> expr()
     | <LE> expr()
-    | <LEFT_ASSIGN> expr()
     | <LEFT_BRACKET> [ subList() ] <RIGHT_BRACKET>
     | <LEFT_SQUARE_DOUBLE> [ subList() ] <RIGHT_SQUARE> <RIGHT_SQUARE>
     | <LEFT_SQUARE> [ subList() ] <RIGHT_SQUARE>
-    | <LIST_SUBSET> ( <SYMBOL> | <STR_CONST> )
+    | <LIST_SUBSET> ( Identifier() | StringConstant() )
     | <LT> expr()
     | <OR> expr()
     | <OR2> expr()
     | <OUTER_PRODUCT> expr()
     | <PLUS> expr()
-    | <RIGHT_ASSIGN> expr()
     | <SEQUENCE> expr()
     | <SPECIAL_OPERATOR> expr()
     | <TILDE> expr()
@@ -237,28 +242,22 @@ void expr() #Expression : {}
 
 void _expr() #void : {}
 {
-  ( <BREAK>
-    | <FOR> forCond() expr()
-    | <FUNCTION> <LEFT_BRACKET> [ formList() ] <RIGHT_BRACKET> expr()
-    | <HELP> expr()
-    | <IF> ifCond() expr() ( <ELSE> expr() )?
-    | <INF>
-    | <LOGICAL_CONSTANT>
-    | <NA>
-    | <NAN>
-    | <NEXT>
-    | <NUM_CONST>
-    | <NULL_CONST>
-    | <LEFT_BRACE> [ exprList() ] <RIGHT_BRACE>
-    | <LEFT_BRACKET> [ subList() ] <RIGHT_BRACKET>
-    | <MINUS> expr()
-    | <NOT> expr()
-    | <PLUS> expr()
-    | <REPEAT> expr()
-    | ( <STR_CONST> | <SYMBOL> ) [ ( <NS_GET> | <NS_GET_INT> ) ( <SYMBOL> | <STR_CONST> ) ]
-    | <TILDE> expr()
-    | <WHILE> cond() expr()
-  ) ( _expr() ) *
+  Arguments()
+  | <BREAK>
+  | Block()
+  | Constant()
+  | For()
+  | Function()
+  | Help()
+  | ( Identifier() | StringConstant() ) [ ( <NS_GET> | <NS_GET_INT> ) ( Identifier() | StringConstant() ) ]
+  | If()
+  | <NEXT>
+  | <MINUS> expr()
+  | <NOT> expr()
+  | <PLUS> expr()
+  | Repeat()
+  | <TILDE> expr()
+  | While()
 }
 
 void cond() #Condition : {}
@@ -273,7 +272,7 @@ void ifCond() #Condition : {}
 
 void forCond() #Condition : {}
 {
-  <LEFT_BRACKET> <SYMBOL> <IN> expr() <RIGHT_BRACKET>
+  <LEFT_BRACKET> Identifier() <IN> expr() <RIGHT_BRACKET>
 }
 
 void exprList() #ExpressionList : {}
@@ -297,10 +296,85 @@ void subList() #SubList : {}
 
 void sub() #Sub : {}
 {
-  ( <SYMBOL> | <STR_CONST> | <NULL_CONST> ) <EQ_ASSIGN> [ expr() ]
+  ( Identifier() | NullConstant() | StringConstant() ) <EQ_ASSIGN> [ expr() ]
   | expr()
 }
 
 void formList() #FormList : {}{
-  <SYMBOL> [ <EQ_ASSIGN> expr() ] ( LOOKAHEAD( { isToken(COMMA) } ) <COMMA> <SYMBOL> [ <EQ_ASSIGN> expr() ] )*
+  Identifier() [ <EQ_ASSIGN> expr() ] ( LOOKAHEAD( { isToken(COMMA) } ) <COMMA> Identifier() [ <EQ_ASSIGN> expr() ] )*
+}
+
+// Extra productions used to make a clearer AST
+void Arguments() : {}
+{
+  <LEFT_BRACKET> [ subList() ] <RIGHT_BRACKET>
+}
+
+void Assignment() : {}
+{
+  ( <EQ_ASSIGN>
+    | <LEFT_ASSIGN>
+    | <RIGHT_ASSIGN>
+  ) expr()
+}
+
+void Block() : {}
+{
+  <LEFT_BRACE> [ exprList() ] <RIGHT_BRACE>
+}
+
+void Constant() : {}
+{
+  <INF>
+  | <LOGICAL_CONSTANT>
+  | <NA>
+  | <NAN>
+  | <NUM_CONST>
+  | <NULL_CONST>
+  | <STR_CONST>
+}
+
+void For() : {}
+{
+  <FOR> forCond() expr()
+}
+
+void Function() : {}
+{
+  <FUNCTION> <LEFT_BRACKET> [ formList() ] <RIGHT_BRACKET> expr()
+}
+
+void Help() : {}
+{
+  <HELP> expr()
+}
+
+void Identifier() : { Token token; }
+{
+  token = <SYMBOL>
+}
+
+void If() : {}
+{
+  <IF> ifCond() expr() ( <ELSE> expr() )?
+}
+
+void NullConstant() #Constant : {}
+{
+  <NULL_CONST>
+}
+
+void Repeat() : {}
+{
+  <REPEAT> expr()
+}
+
+void StringConstant() #Constant : {}
+{
+  <STR_CONST>
+}
+
+void While() : {}
+{
+  <WHILE> cond() expr()
 }
